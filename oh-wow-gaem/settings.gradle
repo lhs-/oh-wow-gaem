@@ -1,1 +1,1 @@
-include ':app', ':nano'
+include ':app', ':core'

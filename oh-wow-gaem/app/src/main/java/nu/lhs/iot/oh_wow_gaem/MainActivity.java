@@ -6,11 +6,11 @@ import android.util.Log;
 
 import java.io.IOException;
 
-import fi.iki.elonen.NanoWebSocketServer;
+import nu.lhs.iot.oh_wow_gaem.echo.DebugWebSocketServer;
 
 public class MainActivity extends Activity {
 
-    private NanoWebSocketServer websocket;
+    private DebugWebSocketServer websocket;
     private MyHTTPD server;
 
     @Override
@@ -23,9 +23,13 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         Log.d("potato", "on resume");
+
         server = new MyHTTPD();
+        websocket = new DebugWebSocketServer(8001, true);
+
         try {
             server.start();
+            websocket.start();
         } catch (IOException e) {
             e.printStackTrace();
         }

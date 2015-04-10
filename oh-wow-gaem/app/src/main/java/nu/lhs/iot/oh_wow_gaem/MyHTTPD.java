@@ -1,4 +1,6 @@
-package nu.lhs.iot.oh_wow_gaem; /**
+package nu.lhs.iot.oh_wow_gaem;
+
+/**
  * Created by smeets on 10/04/15.
  */
 
