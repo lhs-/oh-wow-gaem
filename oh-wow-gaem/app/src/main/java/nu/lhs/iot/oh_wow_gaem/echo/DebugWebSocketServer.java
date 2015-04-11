@@ -1,5 +1,8 @@
 package nu.lhs.iot.oh_wow_gaem.echo;
 
+import android.util.Log;
+
+import nu.lhs.iot.oh_wow_gaem.Gaem;
 import nu.lhs.iot.oh_wow_gaem.NanoWebSocketServer;
 import nu.lhs.iot.oh_wow_gaem.WebSocket;
 
@@ -9,14 +12,17 @@ import nu.lhs.iot.oh_wow_gaem.WebSocket;
 */
 public class DebugWebSocketServer extends NanoWebSocketServer {
     private final boolean debug;
+    private Gaem sdc;
 
-    public DebugWebSocketServer(int port, boolean debug) {
+    public DebugWebSocketServer(int port, Gaem sdc) {
         super(port);
-        this.debug = debug;
+        debug = false;
+        this.sdc = sdc;
     }
 
     @Override
     public WebSocket openWebSocket(IHTTPSession handshake) {
-        return new DebugWebSocket(handshake, debug);
+        DebugWebSocket dws = new DebugWebSocket(handshake, sdc);
+        return dws;
     }
 }

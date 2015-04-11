@@ -1,0 +1,93 @@
+@bg-color: #262627;
+@body-text: #FFF;
+@header: #E86046;
+@header-text: #F2F2F2;
+
+:focus {
+    outline: 0;
+}
+
+a img {
+    border: 0;
+}
+
+a {
+  color: #A14062;
+  &:hover {
+      text-decoration: underline;
+  }
+}
+
+p {
+    font-size: 14pt;
+}
+
+body {
+  font-family: Calibri, Segoe, "Segoe UI", Optima, Arial, sans-serif;
+  color: @body-text;
+  margin: 0;
+  background: @bg-color;
+}
+
+td {
+    background-color: white;
+    min-width: 5px;
+    min-height: 5px;
+}
+
+#canvas {
+    position: absolute;
+    border: 1px solid black;
+}
+
+.content {
+    position: relative;
+    // margin-left: 75px;
+}
+.team1 {
+    position: fixed;
+    left: 10px;
+}
+.team2 {
+    display: block;
+    position: fixed;
+    right: 10px;
+    // margin-left: 90%;
+}
+
+#team1, #team2 {
+    display: block;
+    margin-top: 35px;
+    font-size: 25pt;
+    position: fixed;
+}
+
+#team1 {
+    left: 10px;
+}
+#team2 {
+    right: 10px;
+}
+.info {
+    position: fixed;
+    margin-top: 15px;
+}
+
+#winnar {
+    font-size: 45pt;
+    margin-top: 100px;
+    width: 100%;
+    text-align: center;
+    display: none;
+}
+.timer-container {
+    width: 100%;
+    text-align: center;
+    background-color: black;
+    margin-top: 10px;
+    padding-bottom: 18px;
+}
+#timer {
+    font-size: 28pt;
+    margin-top: 10px;
+}

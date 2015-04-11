@@ -13,7 +13,8 @@ public class MyHTTPD extends NanoHTTPD {
         super(8000);
     }
 
-    @Override public Response serve(IHTTPSession session) {
+    @Override
+    public Response serve(IHTTPSession session) {
         Method method = session.getMethod();
         String uri = session.getUri();
         System.out.println(method + " '" + uri + "' ");

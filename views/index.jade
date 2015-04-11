@@ -1,0 +1,29 @@
+doctype html
+html
+  head
+    meta(name="viewport", charset="UTF-8", content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1")
+    title hackathon gëmu
+    link(rel='stylesheet', href='/stylesheets/style.css')
+    script.
+        var id = "";
+        var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; 
+        for(var i=0; i < 5; i++) {
+            id += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+  body
+            div.content
+                // h2 hackathon gëmu
+                canvas(width="800px" height="600px")#canvas
+                div.info.timer-container
+                    div#timer xx
+                div.info.team1 YOUR TEAM
+                span.info#team1 %
+                div.info.team2 THE ENEMY
+                span.info#team2 %
+
+                div.info#winnar  
+    script(src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js")
+    script(src="/javascripts/jquery.total-storage.min.js")
+    script(src="/socket.io/socket.io.js")
+    script(src="/lib/squares.js")
+    script(src="/lib/network-interface.js")
