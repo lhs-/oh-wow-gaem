@@ -1,5 +1,7 @@
 $(document).ready(function() {
-    window.socket = io.connect('10.20.4.88:8001');
+    
+    window.socket = io.connect('10.20.4.37:8001');
+
     window.socket.emit('subscribe', {msg: "hello! I am " + id, id: id});
 
     /* from other clients (via the server) */
@@ -27,13 +29,19 @@ $(document).ready(function() {
     }));
 
     window.socket.on("update-percent", whenNotMyEvent(function(data) {
-        updatePercent(data.team1, data.team2);
+        updatePercent(data.team1 * 100, data.team2 * 100);
     }));
 
     window.socket.on("set-team", whenNotMyEvent(function(data) {
+        assignTeam(data.team);
     }));
 
     window.socket.on("start", whenNotMyEvent(function(data) {
+        startGame(data.started);
+    }));
+
+    window.socket.on("waiting", whenNotMyEvent(function(data) {
+        waitGame();
     }));
 
     window.socket.on("end", whenNotMyEvent(function(data) {
@@ -41,18 +49,21 @@ $(document).ready(function() {
         announceWinner(data.team1, data.team2);
     }));
 
-    window.socket.on("timer-start", whenNotMyEvent(function(data) {
+    window.socket.on("start-timer", whenNotMyEvent(function(data) {
         console.log("timer start! T-",data.timeout);
+        game.started = true; // true for hack
         startCountdown(data.timeout);
     }));
 
     /* from (this) client's events */
     $("#canvas").on("draw", function(event, drawData) {
-        // scale the cell down from screen coordinates to grid coordinates
-        // e.g. x: 240px => x: 24th cell in that row
-        var cell = {x: Math.floor(drawData.cell.x),
-                    y: Math.floor(drawData.cell.y)}
-        window.socket.emit("draw", {cell: cell, team: drawData.team, size: drawData.size, id: id});
+        if (!game.started) return;
+        window.socket.emit("draw", {
+            cell: drawData.cell, 
+            team: drawData.team, 
+            size: drawData.size, 
+            id: id
+        });
     });
 
     $("#canvas").on("clear", function(event) {

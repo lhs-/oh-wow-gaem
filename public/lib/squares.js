@@ -27,6 +27,10 @@ var COLUMNS = 80;
 var cellScale = {x: canvasElement.width / COLUMNS, y: canvasElement.height /  ROWS};
 var cellSize = (cellScale.x + cellScale.y) / 2;
 
+var game = {
+    started : false
+}
+
 function populateMatrix() {
     for (var i = 0; i < COLUMNS; i++) {
         var emptyRow = [];
@@ -58,18 +62,20 @@ function drawGrid(){
 function assignTeam(team) {
     var team1 = "THE ENEMY";
     var team2 = "YOUR TEAM";
-    currentTeam = 2;
+    currentTeam = team;
+    console.log('i am team', team);
     if (team === 1) {
         team1 = "YOUR TEAM";
         team2 = "THE ENEMY";
-        currentTeam = 1;
     }
     $(".team1").text(team1);
     $(".team2").text(team2);
 }
 function updatePercent(team1, team2) {
+    
     $("#team1").text(toFixed(team1, 1) + "%");
     $("#team2").text(toFixed(team2, 1) + "%");
+
     var oldStyle = context.fillStyle;
     context.fillStyle = TEAM_1;
     context.strokeStyle = TEAM_1;
@@ -158,13 +164,25 @@ $(document).ready(function() {
 canvasElement.addEventListener("touchmove", moveEvent);
 canvasElement.addEventListener("mousemove", moveEvent);
 
+var prevPos = { x : 0, y : 0 }
 function moveEvent(e) {
-    var size = 4;
+    var size = 3;
     // if the mouse-btn is down, we draw!!
+
     if (mouseIsDown) {
+        if (!game.started) {
+            mouseIsDown = false;
+            return;
+        }
+
         var cell = findCellPos(e), pos = findPos(e);
+        var dx = prevPos.x - pos.x,
+            dy = prevPos.y - pos.y,
+            dist = dx*dx + dy*dy;
+        prevPos.x = pos.x;
+        prevPos.y = pos.y;
         // only permit drawing under the ui/header/thing
-        if (cell.y >= 11) {
+        if (cell.y >= 11 && dist >= 120) {
             // if the cell already contains that which is to be drawn: 
             // skip drawing it lol
             if (isSameTeamAt(cell, currentTeam)) { 
@@ -232,6 +250,8 @@ document.addEventListener("keydown", function(e) {
 
 // draw *a* thing when we first click with the mouse button
 canvasElement.addEventListener("mousedown", function(e) {
+    if (!game.started) return;
+    
     var cell = findPos(e);
     var gridPos = findCellPos(e);
     if (gridPos.y >= 11) {
@@ -244,6 +264,8 @@ canvasElement.addEventListener("mousedown", function(e) {
 });
 
 canvasElement.addEventListener("touchstart", function(e) {
+    if (!game.started) return;
+    
     e.preventDefault();
     var size = 5;
     var gridPos = findCellPos(e);
@@ -266,11 +288,11 @@ canvasElement.addEventListener("mouseup", function() {
 
 $("#canvas").on("renderCanvas", function(evt, data) {
     matrix = data.canvas;
-    for (var x = 0; x < COLUMNS; x++) {
-        for (var y = 0; y < ROWS; y++) {
-            var cellPos = {x: x * cellScale.x, y: y * cellScale.y};
-            if (data.canvas[x][y] !== 0) {
-                drawTeam(cellPos, data.canvas[x][y], 0);
+    for (var y = 0; y < ROWS; y++) {
+        for (var x = 0; x < COLUMNS; x++) {
+            var cellPos = {y: y * cellScale.y, x: x * cellScale.x};
+            if (data.canvas[y][x] !== 0) {
+                drawTeam(cellPos, data.canvas[y][x], 0);
             }
         }
     }
@@ -292,16 +314,11 @@ function drawTeam(cell, team, size) {
     } else {
         console.log("SOMETHING BAD HAPPENED IN DRAW TEAM");
     }
-    for (var i = -size; i <= size; i++) {
-        for (var j = -size; j <= size; j++) {
-            var newCell = {x: cell.x + i * cellScale.x, y: cell.y + j * cellScale.y}
-            drawCircle(newCell, size);
-        }
-    }
+
+    drawCircle(cell, size);
     context.fillStyle = oldStyle;
     context.strokeStyle = oldStyle;
 }
-
 
 function drawCircle(cell, size) {
     // draw it twice so that the circle rim is more opaque
@@ -322,7 +339,7 @@ function random() {
     var x = Math.sin(seed++) * 10000;
     return x - Math.floor(x);
 }
-function generateSplats(cell, size) {
+function generateSplats(cell) {
     var offset = 30;
     for (var i = 0; i < 3; i++) {
         var randX = Math.floor(random() * offset) - offset/2;
@@ -332,7 +349,7 @@ function generateSplats(cell, size) {
         context.beginPath();
         context.arc(cell.x + cellSize/2 + randX,
                     cell.y + cellSize/2 + randY, 
-                    (cellSize) * randRadius, 0, 2 * Math.PI, false);
+                    cellSize * randRadius, 0, 2 * Math.PI, false);
         context.fill();
         context.stroke();
         context.closePath();
@@ -419,37 +436,61 @@ function startCountdown(timeout) {
     var timerEl = $("#timer");
     var timer = setInterval(function() {
         timeout = timeout - 100;
+        if (timeout < 0) timeout = 0;
         var displayTime = toFixed(timeout / 1000, 1);
         timerEl.text(displayTime);
         if (timeout <= 0) {
+            timerEl.text("xx");
             clearInterval(timer);
-            // announceWinner(1, 20);
         }
     }, 100);
 }
 
 
 function announceWinner(team1, team2) {
-    var text = "TEAM 1 IS THE WINNER!";
-    if (team2 > team1) {
-        text = "TEAM 2 IS THE WINNER!";
-    }
+    var winner = team2 > team1 ? 2 : 1;
+
+    if (currentTeam === winner)
+        text = "YOUR TEAM WON";
+    else
+        text = "THE ENEMY WON"
+
+    game.started = false;
+    $("#timer").text("xx");
     $("#winnar").show().text(text);
 }
 
-function startGame() {
+function waitGame(){
+    $("#winnar").show().text("Waiting for players");
+}
+
+function startGame(timeout) {
     var arr = ["3", "2", "1", "DRAW!"];
+
+    var time = 650;
+
+    if (timeout === -1) {
+        game.started = true;
+        return;
+    }
+
+    if (timeout) {
+        var msAgo = (Date.now() - timeout);
+        var timeLeft = arr.length * time - msAgo;
+        time = timeLeft / arr.length;
+    }
+
     var timer = setInterval(function() {
         $("#winnar").show().text(text);
         if (arr.length === 0) {
             $("#winnar").hide();
+            clearInterval(timer);
         } else {
             var text = arr.splice(0, 1)
+            game.started = arr.length === 0;
             $("#winnar").show().text(text);
         }
-    }, 650);
-
-    $("#winnar").show().text(text);
+    }, time);
 }
 
 function getPixelColor(e) {
