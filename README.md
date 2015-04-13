@@ -1,6 +1,5 @@
 # oh-wow-gaem
 it's a gëmu
 
-## android version
-this version works with the MVD as the game server, but is riddled with strange
-issues websockets.
+## nodejs version
+this version *does not* work with the MVD as the game server. but it does work pretty fine running on a computer
