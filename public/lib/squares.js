@@ -21,11 +21,14 @@ var debug = false;
 canvasElement.width = window.innerWidth;
 canvasElement.height = window.innerHeight;
 
-var ROWS = 80;
-var COLUMNS = 80;
+var ROWS = 160,
+    COLUMNS = 160;
 
-var cellScale = {x: canvasElement.width / COLUMNS, y: canvasElement.height /  ROWS};
-var cellSize = (cellScale.x + cellScale.y) / 2;
+var cellScale = {
+        x: canvasElement.width / COLUMNS, 
+        y: canvasElement.height /  ROWS
+    },
+    cellSize = (cellScale.x + cellScale.y) / 3;
 
 var game = {
     started : false
@@ -73,8 +76,8 @@ function assignTeam(team) {
 }
 function updatePercent(team1, team2) {
     
-    $("#team1").text(toFixed(team1, 1) + "%");
-    $("#team2").text(toFixed(team2, 1) + "%");
+    $("#team1").text(team1.toFixed(1) + "%");
+    $("#team2").text(team2.toFixed(1) + "%");
 
     var oldStyle = context.fillStyle;
     context.fillStyle = TEAM_1;
@@ -116,26 +119,13 @@ function getTeamAt(cell) {
     }
 }
 
-var lineMode = {
-    enabled: false,
-    xAxisLocked: false,
-    yAxisLocked: false,
-    cell: {x: -1, y: -1}
-}
-var squareMode = {
-    enabled: false,
-    hasStart: false,
-    start: {x: -1, y: -1},
-    end: {x: -1, y: -1}
-}
-
 $(document).ready(function() {
     context.strokeStyle = white;
     context.fillStyle = NEUTRAL;
     context.fillRect(0, 0, canvas.width, canvas.height);
     log("width in cells: " + COLUMNS);
     log("height in cells: " + ROWS);
-    // drawGrid();
+    //drawGrid();
     $(".team1").css("color", TEAM_1);
     $(".team2").css("color", TEAM_2);
     context.fillStyle = NEUTRAL;
@@ -166,7 +156,7 @@ canvasElement.addEventListener("mousemove", moveEvent);
 
 var prevPos = { x : 0, y : 0 }
 function moveEvent(e) {
-    var size = 3;
+    var size = 5;
     // if the mouse-btn is down, we draw!!
 
     if (mouseIsDown) {
@@ -179,68 +169,25 @@ function moveEvent(e) {
         var dx = prevPos.x - pos.x,
             dy = prevPos.y - pos.y,
             dist = dx*dx + dy*dy;
-        prevPos.x = pos.x;
-        prevPos.y = pos.y;
+
         // only permit drawing under the ui/header/thing
-        if (cell.y >= 11 && dist >= 120) {
+        if (cell.y >= 11 && dist >= 260) {
+            prevPos.x = pos.x;
+            prevPos.y = pos.y;
+            
             // if the cell already contains that which is to be drawn: 
             // skip drawing it lol
             if (isSameTeamAt(cell, currentTeam)) { 
                 return;
             }
             $("#canvas").trigger("draw", { cell: cell, team: currentTeam, size: size});
-            drawTeam(pos, currentTeam, 0);
+            drawTeam(pos, currentTeam, size);
         }
     }
 }
 
-document.addEventListener("keyup", function(e) {
-    // 16: shift key up == disable line mode
-    if (e.which === 16) { 
-        lineMode.enabled = false;
-        lineMode.yAxisLocked = false;
-        lineMode.xAxisLocked = false;
-        // lineMode.cell.x = -1;
-        // lineMode.cell.y = -1;
-        log("line mode disabled");
-    }
-    // 17: ctrl key up == disable square mode
-    else if (e.which === 17) { 
-        // squareMode.enabled = false;
-        // squareMode.hasStart = false;
-        // log("square mode disabled");
-    }
-});
-
 document.addEventListener("keydown", function(e) {
-    // shift key == enable line mode (only draw straight lines)
-    if (e.which === 16 && !lineMode.enabled) { 
-        lineMode.enabled = true;
-    }
-    // ctrl key === circle-filled-square mode
-    // else if (e.which === 17 && !squareMode.enabled) {
-    //     log("square mode enabled");
-    //     squareMode.enabled = true;
-    // }
-    
-    // 1 == the black eraser
-    else if (e.which === 49) {
-        context.fillStyle = NEUTRAL;
-        willDrawSquare = true;
-        // 2 == hollow circles
-    } else if (e.which === 50) {
-        context.fillStyle = TEAM_2;
-        context.strokeStyle = TEAM_2;
-        currentTeam = 2;
-        willDrawSquare = false;
-        // 3 == full circles
-    } else if (e.which === 51) {
-        context.fillStyle = TEAM_1;
-        context.strokeStyle = TEAM_1;
-        currentTeam = 1;
-        willDrawSquare = false;
-        // 5 == clear the canvas
-    } else if (e.which ===53) {
+    if (e.which === 53) {
         clearScreen();
         // stop the mouse from drawing
         mouseIsDown = false;
@@ -252,55 +199,54 @@ document.addEventListener("keydown", function(e) {
 canvasElement.addEventListener("mousedown", function(e) {
     if (!game.started) return;
     
-    var cell = findPos(e);
     var gridPos = findCellPos(e);
     if (gridPos.y >= 11) {
-        var size = 5;
+        var size = 8,
+            cell = findPos(e);
         mouseIsDown = true;
-        drawTeam(cell, currentTeam, 1);
+        drawTeam(cell, currentTeam, size);
         $("#canvas").trigger("draw", {cell: gridPos, team: currentTeam, size: size});
-        lineMode.cell = cell; 
     }
 });
 
 canvasElement.addEventListener("touchstart", function(e) {
+    e.preventDefault();
     if (!game.started) return;
     
-    e.preventDefault();
-    var size = 5;
+    var size = 8;
     var gridPos = findCellPos(e);
     if (gridPos.y >= 11) {
-        canvas_x = e.targetTouches[0].pageX;
-        canvas_y = e.targetTouches[0].pageY;
-        var cell = findPos(e);
         mouseIsDown = true;
-        drawTeam(cell, currentTeam, 1);
+        drawTeam(findPos(e), currentTeam, size);
         $("#canvas").trigger("draw", {cell: gridPos, team: currentTeam, size: size});
-        lineMode.cell = cell; 
     }
 });
 
 canvasElement.addEventListener("mouseup", function() {
     mouseIsDown = false;
-    lineMode.xAxisLocked = false;
-    lineMode.yAxisLocked = false;
+});
+canvasElement.addEventListener("touchend", function() {
+    mouseIsDown = false;
 });
 
 $("#canvas").on("renderCanvas", function(evt, data) {
-    matrix = data.canvas;
-    for (var y = 0; y < ROWS; y++) {
-        for (var x = 0; x < COLUMNS; x++) {
-            var cellPos = {y: y * cellScale.y, x: x * cellScale.x};
-            if (data.canvas[y][x] !== 0) {
-                drawTeam(cellPos, data.canvas[y][x], 0);
-            }
-        }
+    for (var i = 0, l = data.events.length; i < l; i++) {
+        evt = data.events[i]
+        drawCell(evt.cell, evt.team, evt.size);
     }
 });
 
+function drawCell(cell, team, size) {
+    var pos = {
+        x : cell.x * cellScale.x,
+        y : cell.y * cellScale.y
+    }
+    drawTeam(pos, team, size)
+}
+
 function drawTeam(cell, team, size) {
     // update the matrix and continue drawing on the canvas
-    setMatrixCell(cell, team, size);
+    //setMatrixCell(cell, team, size);
     var oldStyle = context.fillStyle;
     if (team == 0) {
         // context.fillStyle = NEUTRAL;
@@ -322,15 +268,15 @@ function drawTeam(cell, team, size) {
 
 function drawCircle(cell, size) {
     // draw it twice so that the circle rim is more opaque
-    for (var i = 0; i < 2; i++) {
+    //for (var i = 0; i < 2; i++) {
         context.beginPath();
-        context.arc(cell.x + cellSize/2,
-                    cell.y + cellSize/2, 
-                    cellSize / 4, 0, 2 * Math.PI, false);
-        context.fill();
+        context.arc(cell.x,
+                    cell.y, 
+                    cellSize * size, 0, 2 * Math.PI, false);
         context.stroke();
+        context.fill();
         context.closePath();
-    }
+    //}
     generateSplats(cell, size);
 }
 
@@ -339,17 +285,17 @@ function random() {
     var x = Math.sin(seed++) * 10000;
     return x - Math.floor(x);
 }
-function generateSplats(cell) {
-    var offset = 30;
+function generateSplats(cell, size) {
+    var offset = 50;
     for (var i = 0; i < 3; i++) {
         var randX = Math.floor(random() * offset) - offset/2;
         var randY = Math.floor(random() * offset) - offset/2;
         var randRadius = 0.4 + 1.5 * random();
 
         context.beginPath();
-        context.arc(cell.x + cellSize/2 + randX,
-                    cell.y + cellSize/2 + randY, 
-                    cellSize * randRadius, 0, 2 * Math.PI, false);
+        context.arc(cell.x + randX,
+                    cell.y + randY, 
+                    cellSize * randRadius * size, 0, 2 * Math.PI, false);
         context.fill();
         context.stroke();
         context.closePath();
@@ -366,36 +312,42 @@ function clearScreen() {
 }
 
 // find the position on the canvas that was clicked
-function findPos(e) { 
-    var offsetX  = (e.offsetX || e.clientX - $(e.target).offset().left || e.targetTouches[0].pageX);
-    var offsetY  = Math.floor(e.offsetY || e.clientY - $(e.target).offset().top || e.targetTouches[0].pageY);
+var offsetLeft = canvasElement.offsetLeft,
+    offsetTop = canvasElement.offsetTop
+function findPos(e) {
+    // worst method ever, wtf is wrong with the world??
+    var cell = { x : 0, y : 0 }
 
-    return {x: offsetX, y: offsetY};
+    if (e.targetTouches) {
+        return {
+            x : e.offsetX || e.targetTouches[0].pageX,
+            y : e.offsetY || e.targetTouches[0].pageY
+        }
+    } else if (e.x != undefined && e.y != undefined) {
+        cell.x = e.x;
+        cell.y = e.y;
+    } else {
+        cell.x = e.clientX;
+        cell.y = e.clientY;
+    }
+
+    cell.x -= canvas.offsetLeft + document.body.scrollLeft + document.documentElement.scrollLeft;
+    cell.y -= canvas.offsetTop + document.body.scrollTop + document.documentElement.scrollTop;
+    return { x : cell.x, y : cell.y }
 }
 
 // convert the canvas position from pixel coords to cell coords
 function findCellPos(e) {
     var pos = findPos(e);
-    var cellX = Math.floor(pos.x / cellScale.x);
-    var cellY = Math.floor(pos.y / cellScale.y);
 
-    if (lineMode.enabled && lineMode.xAxisLocked && mouseIsDown) {
-        cellX = lineMode.cell.x;
-    } else if (lineMode.enabled && lineMode.yAxisLocked && mouseIsDown) {
-        cellY = lineMode.cell.y;
-    }
-
-    return {x: cellX, y: cellY};
+    return {
+        x: Math.floor(pos.x / cellScale.x), 
+        y: Math.floor(pos.y / cellScale.y)
+    };
 }
 
 function isSameTeamAt(cell, type) {
     return getTeamAt(cell) === type;
-}
-
-function erase(cell) {
-    var left = cell.x;
-    var top = cell.y;
-    context.fillRect(left, top, cellSize, cellSize);
 }
 
 function log(msg) {
@@ -404,46 +356,35 @@ function log(msg) {
     }
 }
 
-/** not used anymore, but you never knowwwww */
-function pickNextColor(hex) {
-    if (hex === white) {
-        return TEAM_1;
-    } else if (hex === lightGray) {
-        return darkGray;
-    } else if (hex === darkGray) {
-        return TEAM_2;
-    } else if (hex === TEAM_2 || hex === "#000000") {
-        return white;
-    }
-}
+var countdownTimer = {
+    el : $("#timer"),
+    handle : undefined,
+    timeout : undefined,
+    tickTock : function() {
+        countdownTimer.timeout = countdownTimer.timeout - 100;
 
-// helper function for displaying floats to a certain percision
-function toFixed(value, precision) {
-    var precision = precision || 0,
-        power = Math.pow(10, precision),
-        absValue = Math.abs(Math.round(value * power)),
-        result = (value < 0 ? '-' : '') + String(Math.floor(absValue / power));
+        if (countdownTimer.timeout < 0) 
+            countdownTimer.timeout = 0;
 
-    if (precision > 0) {
-        var fraction = String(absValue % power),
-            padding = new Array(Math.max(precision - fraction.length, 0) + 1).join('0');
-        result += '.' + padding + fraction;
-    }
-    return result;
-}
-
-function startCountdown(timeout) {
-    var timerEl = $("#timer");
-    var timer = setInterval(function() {
-        timeout = timeout - 100;
-        if (timeout < 0) timeout = 0;
-        var displayTime = toFixed(timeout / 1000, 1);
-        timerEl.text(displayTime);
-        if (timeout <= 0) {
-            timerEl.text("xx");
-            clearInterval(timer);
+        countdownTimer.el.text((countdownTimer.timeout / 1000).toFixed(1));
+        if (countdownTimer.timeout <= 0) {
+            countdownTimer.el.text("xx");
+            clearInterval(countdownTimer.handle);
+            countdownTimer.handle = countdownTimer.timeout = undefined;
         }
-    }, 100);
+    }
+};
+function startCountdown(deadline, timeout) {
+    countdownTimer.timeout = deadline - Date.now();
+
+    // If we somehow are desync time-wise, use the provided timeout instead
+    if (countdownTimer.timeout > timeout)
+        countdownTimer.timeout = timeout;
+
+    countdownTimer.el.text((countdownTimer.timeout / 1000).toFixed(1));
+
+    if (!countdownTimer.handle)
+        countdownTimer.handle = setInterval(countdownTimer.tickTock, 100);
 }
 
 
@@ -461,48 +402,38 @@ function announceWinner(team1, team2) {
 }
 
 function waitGame(){
+    game.started = false;
     $("#winnar").show().text("Waiting for players");
 }
 
-function startGame(timeout) {
+var gameTimer = {
+    handle : undefined,
+}
+function startGame(deadline, immediate, refTimeout) {
     var arr = ["3", "2", "1", "DRAW!"];
 
-    var time = 650;
+    var timeout = deadline - Date.now()
+    if (timeout > refTimeout)
+        timeout = refTimeout;
 
-    if (timeout === -1) {
+    if (timeout <= 0 || immediate) {
         game.started = true;
-        return;
+        $("#winnar").show().hide();
+
+        if (gameTimer.handle)
+            clearInterval(gameTimer.handle);
+        gameTimer.handle = undefined;
     }
 
-    if (timeout) {
-        var msAgo = (Date.now() - timeout);
-        var timeLeft = arr.length * time - msAgo;
-        time = timeLeft / arr.length;
-    }
-
-    var timer = setInterval(function() {
+    gameTimer.handle = setInterval(function() {
         $("#winnar").show().text(text);
         if (arr.length === 0) {
             $("#winnar").hide();
-            clearInterval(timer);
+            clearInterval(gameTimer.handle);
         } else {
             var text = arr.splice(0, 1)
             game.started = arr.length === 0;
             $("#winnar").show().text(text);
         }
-    }, time);
-}
-
-function getPixelColor(e) {
-    var pos = findPos(e);
-    var posColorData = context.getImageData(pos.x, pos.y, 1, 1).data;
-    var hex = "#" + ("000000" + rgbToHex(posColorData[0], posColorData[1], posColorData[2])).slice(-6);
-    log(hex);
-    return hex;
-}
-
-function rgbToHex(r, g, b) {
-    if (r > 255 || g > 255 || b > 255)
-        throw "Invalid color component";
-    return ((r << 16) | (g << 8) | b).toString(16);
+    }, timeout / arr.length);
 }

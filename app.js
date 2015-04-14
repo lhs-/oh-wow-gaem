@@ -9,13 +9,13 @@ var http = require('http');
 var path = require('path');
 var app = express();
 
-var canvasMatrix = [];
+var canvasMatrix = []; // canvasMatrix[y][x] --> team
 var debug = true;
 
-var ROWS = 80;
-var COLUMNS = 80;
-// remove header cells
-var TOTAL_CELLS = ROWS * COLUMNS - 11 * COLUMNS;
+var ROWS = 160,
+    COLUMNS = 160,
+    // remove header cells
+    TOTAL_CELLS = ROWS * COLUMNS - 11 * COLUMNS;
 
 // all environments
 app.set('port', '8001');
@@ -40,120 +40,246 @@ if ('development' == app.get('env')) {
 
 app.get("/", routes.index);
 
-populateCanvasMatrix(ROWS, COLUMNS);
-
 var server = http.createServer(app);
 server.listen(app.get('port'), function(){
     console.log('Express server listening on port ' + app.get('port'));
+    populateCanvasMatrix(ROWS, COLUMNS);
 });
 
 /* matrix based approach */
-// canvas[y][x]
-function populateCanvasMatrix(rows, columns) {
-    for (var y = 0; y < rows; y++) {
-        var emptyRow = [];
+function populateCanvasMatrix() {
+    canvasMatrix = new Array(ROWS);
+    for (var y = 0; y < ROWS; y++) {
+        var emptyRow = new Array(COLUMNS);
         // populate the row with entries of pure hex black
-        for (var x = 0; x < columns; x++) {
+        for (var x = 0; x < COLUMNS; x++) {
             emptyRow.push(0);
         }
-        canvasMatrix.push(emptyRow);
+        canvasMatrix[y] = emptyRow;
     }
 }
 
-function clearCanvas(rows, columns) {
-    canvasMatrix = [];
-    populateCanvasMatrix(rows, columns);
+/* clear the canvas */
+function clearCanvas() {
+    for (var y = 0; y < ROWS; y++)
+        for (var x = 0; x < COLUMNS; x++)
+            canvasMatrix[y][x] = 0;
 }
 
-function setMatrixCell(x, y, team) {
-    // canvas[y][x] --> color
-    var row = canvasMatrix[y];
+function checkValidCell(x, y) {
+    if (x >= COLUMNS || y >= ROWS || y < 0 || x < 0)
+        return false;
 
-    if (row)
-        row[x] = team;
-    else
-        console.log("error setting matrix cell", canvasMatrix.length, "vs", y);
-}
-
-function getMatrixCellTeam(x, y) {
-    var row = canvasMatrix[y];
-    
-    if (row)
-        return row[x];
-    
-    console.log("error getting matrix cell", canvasMatrix.length, "vs", y);
-    return null;
-}
-
-function startGame(){
-    game.timerHandle = undefined;
-    
-    clearCanvas(ROWS, COLUMNS);
-    io.sockets.in(netPavilion).emit("clear", { id : 'no-id' });
-    
-    io.sockets.in(netPavilion).emit('update-percent', {
-        team1 : 0,
-        team2 : 0
-    })
-
-    team1Cells = team2Cells = 0;
-
-    game.ended = undefined; // ended is actually when we started the countdown
-    game.starting = Date.now();
-    game.started = false;
-    game.ended = undefined;
-    
-    setTimeout(function (){
-        game.started = true;
-        game.starting = undefined;
-        game.restarting = false;
-    }, 3 * 650)
-
-    console.log("starting geamu")
-    io.sockets.in(netPavilion).emit("start", {})
-}
-
-function endGame(){
-    game.ended = undefined; // ended is actually when we started the countdown
-    game.starting = undefined;
-    game.started = false;
-    game.ended = undefined;
-    game.restarting = true;
-
-    io.sockets.in(netPavilion).emit("end", {
-        team1: team1Cells, 
-        team2: team2Cells
-    });
-
-    io.sockets.in(netPavilion).emit('update-percent', {
-        team1 : team1Cells / TOTAL_CELLS,
-        team2 : team2Cells / TOTAL_CELLS
-    })
-    setTimeout(startGame, 10 * 1000)
+    return y >= 11;
 }
 
 /* happy happy socket.io code */
 var io = sockio.listen(server);
 var netPavilion = "pavilion";
 
-var team1Cells = 0;
-var team2Cells = 0;
+function emitAll(msg, obj) {
+    io.sockets.in(netPavilion).emit(msg, obj);
+}
+function activateState(state) {
+    console.log('switching from', game.state.name, 'to', state.name)
+    game.state.deactivate();
+    game.state = state;
+    state.activate();
+}
+
+// States -- this is actually the core game logic
+var WAITING = {
+        name : 'WAITING',
+        initClient : function (client){
+            // Did this client move us past the threshold?
+            if (WAITING.wantStart())
+                activateState(STARTING);
+            else {
+                client.emit('waiting', {});
+                client.emit('update-percent', { team1 : 0, team2 : 0 })
+            }
+        },
+        deinitClient : function (client) { /* team deregistration has already been done */ },
+        activate : function (){
+            if (WAITING.wantStart())
+                activateState(STARTING);
+            else
+                emitAll('waiting')
+        },
+        deactivate : function () {},
+        wantStart : function (){
+            return game.team1 + game.team2 >= 2;
+        }
+    },
+    STARTING = {
+        name : 'STARTING',
+        deadline : undefined,
+        timer : undefined,
+        initClient : function (client){
+            // Allow players connecting during countdown to start simultaneously
+            client.emit('start', { 
+                deadline : STARTING.deadline,
+                timeout : STARTING.deadline - Date.now()
+            });
+            client.emit('update-percent', { team1 : 0, team2 : 0 });
+            client.emit('clear', {});
+        },
+        deinitClient : function (client) {
+            // Do we want to transition back?
+            if (!WAITING.wantStart()) {
+                activateState(WAITING);
+                clearTimeout(STARTING.timer);
+            }
+        },
+        activate : function () {
+            // 3/2/1 each show up for 650ms, DRAW is when players may start drawing
+            STARTING.deadline = Date.now() + 3 * 650;
+            
+            clearCanvas();
+            emitAll('clear', {});
+            game.drawEvents = [];
+
+            STARTING.timer = setTimeout(function () {
+                activateState(PLAYING);
+            }, 3 * 650)
+            emitAll('start', { 
+                deadline : STARTING.deadline,
+                timeout : 3 * 650
+            });
+            emitAll('update-percent', { team1 : 0, team2 : 0 });
+        },
+        deactivate : function () { 
+            if (STARTING.timer)
+                clearTimeout(STARTING.timer)
+            STARTING.timer = STARTING.deadline = undefined;
+        }
+    },
+    PLAYING = {
+        name : 'PLAYING',
+        team1Cells : 0,
+        team2Cells : 0,
+
+        deadline : undefined,
+        timer : undefined,
+
+        initClient : function (client) {
+            client.emit('start', { immediately : true })
+            client.emit('update-percent', { 
+                team1 : PLAYING.team1Cells / TOTAL_CELLS, 
+                team2 : PLAYING.team2Cells / TOTAL_CELLS
+            });
+            client.emit('render-canvas', { events: game.drawEvents })
+            if (PLAYING.deadline)
+                client.emit('start-timer', { 
+                    deadline : PLAYING.deadline,
+                    timemout : PLAYING.deadline - Date.now()
+                })
+        },
+        deinitClient : function (client) { /* rebalance teams? */ },
+        activate : function (){
+             PLAYING.team1Cells = PLAYING.team2Cells = 0;
+            //clearCanvas();
+            emitAll('start', { immediately : true })
+            PLAYING.timer = PLAYING.deadline = undefined;
+        },
+        update : function (team, cells) {
+            if (team === 1) 
+                PLAYING.team1Cells += cells;
+            else 
+                PLAYING.team2Cells += cells;
+
+            emitAll("update-percent", {
+                team1: PLAYING.team1Cells / TOTAL_CELLS, 
+                team2: PLAYING.team2Cells / TOTAL_CELLS
+            });
+
+            var accum = PLAYING.team1Cells + PLAYING.team2Cells
+            if (accum > TOTAL_CELLS * 0.3 && !PLAYING.deadline) {
+                // 15 sec if few, 10 sec if many. 
+                var timeout = (game.team1 + game.team2) < 8 ? 15 : 10;
+                timeout *= 1000;
+
+                PLAYING.deadline = Date.now() + timeout;
+
+                // Emit both deadline and timeout, allowing client to figure out the rest
+                emitAll('start-timer', { 
+                    deadline : PLAYING.deadline,
+                    timemout : timeout 
+                })
+
+                PLAYING.timer = setTimeout(function (){
+                    var team1 = PLAYING.team1Cells / TOTAL_CELLS, 
+                        team2 = PLAYING.team2Cells / TOTAL_CELLS;
+
+                    emitAll('end', { team1 : team1, team2 : team2 })
+                    emitAll('update-percent', { team1 : team1, team2 : team2 })
+                    activateState(RESTARTING);
+                }, timeout);
+            }
+        },
+        deactivate : function () { 
+            if (PLAYING.timer)
+                clearTimeout(PLAYING.timer)
+            PLAYING.timer = PLAYING.deadline = undefined;
+        }
+    },
+    RESTARTING = {
+        name : 'RESTARTING',
+        deadline : undefined,
+        timer : undefined,
+        initClient : function (client){
+            var team1 = PLAYING.team1Cells / TOTAL_CELLS, 
+                team2 = PLAYING.team2Cells / TOTAL_CELLS;
+
+            client.emit('render-canvas', { canvas: game.drawEvents });
+            client.emit('start-timer', { 
+                deadline : RESTARTING.deadline,
+                timeout : RESTARTING.deadline - Date.now()
+            });
+            client.emit('end', { team1 : team1, team2 : team2 });
+            client.emit('update-percent', { team1 : team1, team2 : team2 });
+        },
+        deinitClient : function (client) {
+            // If we lost enough players that we cannot actually start next round
+            // switch directly to waiting state.
+            if (!WAITING.wantStart())
+                activateState(WAITING);
+        },
+        activate : function (){
+            var timeout = 10 * 1000;
+            RESTARTING.deadline = Date.now() + timeout;
+            emitAll('start-timer', { 
+                deadline : RESTARTING.deadline,
+                timeout : timeout
+            });
+            RESTARTING.timer = setTimeout(function (){
+                activateState(WAITING);
+            }, timeout);
+        },
+        deactivate : function () { 
+            if (RESTARTING.timer)
+                clearTimeout(RESTARTING.timer)
+            RESTARTING.timer = RESTARTING.deadline = undefined;
+        }
+    }
+
 var game = {
-    timerHandle : undefined,
     team1 : 0,
     team2 : 0,
-    started : false
+    state : WAITING,
+    drawEvents : []
 }
 
 io.sockets.on('connection', function (socket) { 
     
     socket.on('disconnect', function (){
-        console.log(socket.team, 'disconnected')
+        
         game[socket.team]--;
+        game.state.deinitClient(socket);
+        console.log(socket.id, 'disconnected', game.team1 + game.team2, 'players remaining')
     })
 
-    socket.on('subscribe', function (data) { 
-        log(data.msg);
+    socket.on('subscribe', function () { 
         socket.join(netPavilion);
 
         // assign new player into team with fewest players
@@ -167,120 +293,61 @@ io.sockets.on('connection', function (socket) {
             socket.emit('set-team', { team : 1 });
         }
 
-        // send up-to-date info
-        socket.emit('update-percent', {
-            team1 : team1Cells / TOTAL_CELLS,
-            team2 : team2Cells / TOTAL_CELLS
-        })
+        console.log(socket.id, 'connected to team', socket.team, '(total =', (game.team1 + game.team2) + ')')
 
-        var wantStart = !game.started && !game.starting && !game.ended && !game.restarting;
-
-        if (wantStart && game.team1 + game.team2 >= 2) {
-            game.starting = Date.now();
-            io.sockets.in(netPavilion).emit('start', {});
-            setTimeout(function (){
-                game.started = true;
-                game.starting = undefined;
-            }, 650 * 3);
-        } else if (wantStart && game.team1 + game.team2 < 2) {
-            socket.emit('waiting', {});
-        } else if (game.starting) {
-            socket.emit('start', { started : game.starting });
-        } else if (game.timerHandle && game.ended) {
-            var ends = game.ended + game.timeout,
-                endsIn = ends - Date.now();
-            socket.emit('start-timer', { timeout : endsIn })
-        } else {
-            socket.emit('start', { started : -1 })
-        }
-
-        //TODO: optimize later, did the optmizise
-        socket.emit('peer connected', {
-            response: "hi there!", 
-            id: data.id, 
-            canvas: JSON.stringify(canvasMatrix)
-        }); 
+        // run state initialization
+        game.state.initClient(socket);
     });
 
     // should store 0, 1, 2 instead? 0 for neutral, 1 for team1, 2 for team2
     socket.on("draw", function(data) {
-        // notify other players
-        io.sockets.in(netPavilion).emit("draw", {id: data.id, cell: data.cell, team: data.team, size: data.size});
+        // If client somehow can draw despite game not started, ignore it
+        if (game.state !== PLAYING) 
+            return;
 
-        // data.cell.x/y, data.size, data.team
-        var cellsChanged = 0;
-        for (var y = data.cell.y - data.size; y <= data.cell.y + data.size; y++) {
-            for (var x = data.cell.x - data.size; x <= data.cell.x + data.size; x++) {
-                
-                if (x < 0 || y < 0) continue;
-                if (y <= 10) continue;
-                if (x >= COLUMNS || y >= ROWS) continue;
+        // data.cell.x/y, data.size, data.team -- figure out which cells that must be updated
+        var cellsChanged = 0, owner = 0, y, x;
+        for (y = data.cell.y - data.size; y <= data.cell.y + data.size; y++) {
+            if (y <= 10) continue; // don't even try
+            
+            for (x = data.cell.x - data.size; x <= data.cell.x + data.size; x++) {
+                if (!checkValidCell(x, y)) continue;
 
-                var owner = getMatrixCellTeam(x, y);
+                // We know the x,y cell is valid due to checkValidCell so skip safety check
+                owner = canvasMatrix[y][x];
                 if (owner !== data.team) {
                     // remove from previous owner
+                    // we don't need to update anything because team1Cells+team2Cells is constant
                     if (owner === 1)
-                        team1Cells--;
+                        PLAYING.team1Cells--;
                     else if (owner === 2)
-                        team2Cells--;
+                        PLAYING.team2Cells--;
 
                     cellsChanged++;
-                    setMatrixCell(x, y, data.team);
+                    canvasMatrix[y][x] = data.team;
                 }
             }
         }
 
-        if (data.team === 1) 
-            team1Cells += cellsChanged;
-        else 
-            team2Cells += cellsChanged;
+        // If we didn't change any cells, then don't bother updating
+        if (cellsChanged === 0)
+            return;
 
-        if (team1Cells + team2Cells >= TOTAL_CELLS * 0.30 && !game.timerHandle) {
-            console.log("hello end me now, or later")
-            var total = game.team1 + game.team2;
-            
-            game.timeout = 10;
-            game.ended = Date.now();
-            if (total < 8) game.timeout = 15;
+        game.state.update(data.team, cellsChanged)
 
-            game.timeout *= 1000;
-            
-            game.timerHandle = setTimeout(endGame, game.timeout);
-            io.sockets.in(netPavilion).emit('start-timer', {
-                timeout : game.timeout
-            });
-        }
-
-        var t1Percent = team1Cells / TOTAL_CELLS;
-        var t2Percent = team2Cells / TOTAL_CELLS;
-
-        io.sockets.in(netPavilion).emit("update-percent", {
-            id: "no-id", 
-            team1: t1Percent, 
-            team2: t2Percent
+        // Only store minimum of data. Discard who-sent-id
+        game.drawEvents.push({
+            cell : data.cell,
+            team : data.team,
+            size : data.size
         });
+
+        // Notify other players of the event
+        io.sockets.in(netPavilion).emit("draw", data); 
     });
 
     socket.on("clear", function(data) {
-        team1Cells = team2Cells = 0;
-
-        game.ended = undefined; // ended is actually when we started the countdown
-        game.starting = Date.now();
-        game.started = false;
-        game.ended = undefined;
-
-        setTimeout(function (){
-            game.started = true;
-            game.starting = undefined;
-        }, 3 * 650)
-        
-        io.sockets.in(netPavilion).emit('update-percent', {
-            team1 : 0,
-            team2 : 0
-        })
-        io.sockets.in(netPavilion).emit('start', {});
-        io.sockets.in(netPavilion).emit("clear", { id : 'no-id'});
-        clearCanvas(ROWS, COLUMNS);
+        activateState(STARTING);
     });
 }); 
 
