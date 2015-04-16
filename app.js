@@ -18,7 +18,8 @@ var ROWS = 160,
     TOTAL_CELLS = ROWS * COLUMNS - 11 * COLUMNS;
 
 // all environments
-app.set('port', '8001');
+var port = (process.env.VCAP_APP_PORT || 8001);
+app.set('port', port);
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 app.use(require('less-middleware')(path.join(__dirname, 'public') ));
