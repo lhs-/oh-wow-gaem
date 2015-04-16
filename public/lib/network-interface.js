@@ -1,6 +1,6 @@
 $(document).ready(function() {
     
-    window.socket = io.connect('192.168.1.8:8001');
+    window.socket = io.connect(window.document.location.host);
 
     window.socket.emit('subscribe', { msg: "hello! I am " + id, id: id });
 
