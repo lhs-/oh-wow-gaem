@@ -205,7 +205,7 @@ var WAITING = {
                 // Emit both deadline and timeout, allowing client to figure out the rest
                 emitAll('start-timer', { 
                     deadline : PLAYING.deadline,
-                    timemout : timeout 
+                    timeout : timeout 
                 })
 
                 PLAYING.timer = setTimeout(function (){
